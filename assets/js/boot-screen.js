@@ -68,12 +68,21 @@
         <div class="boot-skip-hint">
           Press any key to skip
         </div>
+
+        <!-- Autoplay Policy Override Overlay -->
+        <div id="boot-start-overlay" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); cursor: pointer;">
+          <button id="boot-start-btn" style="padding: 15px 30px; font-size: 20px; background: rgba(0, 212, 255, 0.2); border: 1px solid #00d4ff; color: #00d4ff; border-radius: 4px; box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); pointer-events: none;">START GRACE-X</button>
+        </div>
       `;
       
       document.body.insertBefore(bootScreen, document.body.firstChild);
       
-      // Start boot video (three clips, crossfade); fallback to timer if video fails
-      this.startBootVideo();
+      // Wait for user interaction to start the video
+      const overlay = document.getElementById('boot-start-overlay');
+      overlay.addEventListener('click', () => {
+        overlay.style.display = 'none';
+        this.startBootVideo();
+      });
     },
 
     startBootVideo() {
@@ -146,29 +155,15 @@
         video1.play().then(() => {
           playStarted = true;
           console.log('[BOOT] Video 1 playing!');
-          // Unmute after a short delay (browser allows this after user gesture or autoplay policy)
-          setTimeout(() => { video1.muted = false; }, 100);
+          video1.muted = false; // We can unmute immediately now because of the prior user click
         }).catch((err) => {
           console.warn('[BOOT] Play failed:', err.message);
           // Don't fallback immediately - might just need user interaction
         });
       }
 
-      // Try multiple events to catch when video is ready
-      video1.addEventListener('loadeddata', tryPlay);
-      video1.addEventListener('canplay', tryPlay);
-      video1.addEventListener('canplaythrough', tryPlay);
-      
-      // Unmute once actually playing
-      video1.addEventListener('playing', () => {
-        playStarted = true;
-        setTimeout(() => { video1.muted = false; }, 100);
-      }, { once: true });
-
-      // Try immediately if already loaded
-      if (video1.readyState >= 2) {
-        tryPlay();
-      }
+      // We don't tryPlay on loadeddata automatically because we are already running inside a click handler
+      tryPlay();
 
       // Force load
       video1.load();
