@@ -749,18 +749,24 @@
   function detectArrayAnomalies(arr) {
     const anomalies = [];
     
-    // For numeric arrays
+    // For numeric arrays, use Interquartile Range (IQR) for more robust outlier detection
     if (arr.every(x => typeof x === 'number')) {
       const metrics = calculateNumericMetrics(arr);
-      const threshold = 2 * metrics.standardDeviation;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const iqr = q3 - q1;
+      const lowerBound = q1 - 1.5 * iqr;
+      const upperBound = q3 + 1.5 * iqr;
       
       arr.forEach((val, idx) => {
-        if (Math.abs(val - metrics.mean) > threshold) {
+        if (val < lowerBound || val > upperBound) {
           anomalies.push({
             index: idx,
             value: val,
-            type: 'outlier',
-            deviation: Math.abs(val - metrics.mean)
+            type: 'iqr-outlier',
+            deviation: Math.abs(val - metrics.mean),
+            severity: val < (q1 - 3 * iqr) || val > (q3 + 3 * iqr) ? 'extreme' : 'mild'
           });
         }
       });
@@ -827,6 +833,80 @@
     return diffs;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // REGEX EXTRACTION SUITE
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  const REGEX_LIBRARY = {
+    urls: /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)/gi,
+    emails: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi,
+    phoneNumbers: /(?:(?:\+?1\s*(?:[.-]\s*)?)?(?:\(\s*([2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|([2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?([2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?([0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(\d+))?/gi,
+    hashtags: /#[\w]+/gi,
+    mentions: /@[\w]+/gi,
+    currency: /[$€£¥]\s*\d+(?:,\d{3})*(?:\.\d{2})?/gi
+  };
+
+  /**
+   * Extract targeted data from text using standard regex patterns
+   * @param {string} text - The input text to parse
+   * @param {string} patternType - 'urls', 'emails', 'phoneNumbers', 'hashtags', 'mentions', 'currency', or 'all'
+   * @returns {array|object} Array of matches, or object grouping all matches
+   */
+  GraceX.Analytics.extract = function(text, patternType = 'all') {
+    if (typeof text !== 'string') return null;
+
+    if (patternType === 'all') {
+      const results = {};
+      for (const [key, regex] of Object.entries(REGEX_LIBRARY)) {
+        results[key] = text.match(regex) || [];
+      }
+      return results;
+    }
+
+    if (!REGEX_LIBRARY[patternType]) {
+      console.warn(`[ANALYTICS] Unknown regex pattern type: ${patternType}`);
+      return [];
+    }
+
+    return text.match(REGEX_LIBRARY[patternType]) || [];
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TIME-SERIES ANOMALIES
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  /**
+   * Detect sudden spikes/drops in numerical series data (baseline velocity logic)
+   */
+  GraceX.Analytics.detectTimeSeriesAnomalies = function(dataPoints) {
+    if (!Array.isArray(dataPoints) || dataPoints.length < 3) return [];
+    if (!dataPoints.every(x => typeof x === 'number')) return [];
+
+    const anomalies = [];
+    const windowSize = 3; // Basic moving average window
+    
+    for (let i = windowSize; i < dataPoints.length; i++) {
+        const windowData = dataPoints.slice(i - windowSize, i);
+        const baseline = windowData.reduce((a, b) => a + b, 0) / windowSize;
+        const current = dataPoints[i];
+        
+        // Define an anomaly as a > 50% deviation from the local baseline
+        const deviationPercent = Math.abs(current - baseline) / (baseline || 1);
+        
+        if (deviationPercent > 0.5) {
+            anomalies.push({
+                index: i,
+                value: current,
+                baseline: baseline,
+                deviationPercent: (deviationPercent * 100).toFixed(2) + '%',
+                type: current > baseline ? 'spike' : 'drop'
+            });
+        }
+    }
+    
+    return anomalies;
+  };
+
   /**
    * Clear analysis cache
    */
@@ -848,6 +928,6 @@
   };
 
   console.log("[GRACE-X ANALYTICS BRAIN] v1.0.0 loaded ✓");
-  console.log("[ANALYTICS] Pattern detection: ON | Anomaly detection: ON");
+  console.log("[ANALYTICS] Pattern detection: ON | Anomaly detection: ON | Extractor: ON");
   
 })();

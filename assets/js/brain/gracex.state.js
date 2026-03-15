@@ -88,6 +88,73 @@
 
   GraceX.state = GraceX.state || initState();
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // TIME-TRAVEL DEBUGGING
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  GraceX.stateHistory = GraceX.stateHistory || [];
+  const MAX_HISTORY = 50;
+
+  function recordHistorySnapshot() {
+    if (GraceX.stateHistory.length >= MAX_HISTORY) {
+      GraceX.stateHistory.shift(); // Remove oldest to prevent memory bloat
+    }
+    GraceX.stateHistory.push({
+      timestamp: Date.now(),
+      state: deepClone(GraceX.state),
+      meta: {
+        activeModule: GraceX.state.activeModule,
+        intent: GraceX.state.lastIntent,
+        replyPreview: GraceX.state.lastReply?.substring(0, 30)
+      }
+    });
+  }
+
+  // Record initial state
+  if (GraceX.stateHistory.length === 0) {
+    recordHistorySnapshot();
+  }
+
+  /**
+   * Rewind the brain state backwards by `steps`
+   */
+  GraceX.rewindState = function(steps = 1) {
+    if (steps <= 0 || GraceX.stateHistory.length <= 1) return false;
+    
+    // Ensure we don't rewind further than we have
+    const actualSteps = Math.min(steps, GraceX.stateHistory.length - 1);
+    
+    // Remove the future states we are rewinding past
+    GraceX.stateHistory.splice(GraceX.stateHistory.length - actualSteps, actualSteps);
+    
+    // The new "current" state is now the last one in the history array
+    const targetSnapshot = GraceX.stateHistory[GraceX.stateHistory.length - 1];
+    GraceX.state = deepClone(targetSnapshot.state);
+    
+    console.log(`[STATE] Time-traveled backwards by ${actualSteps} frames. Now at: [${targetSnapshot.meta.activeModule}:${targetSnapshot.meta.intent}]`);
+    
+    // Dispatch an event so the UI knows to update
+    window.dispatchEvent(new CustomEvent('GRACEX_STATE_REWIND', { 
+      detail: { steps: actualSteps, state: GraceX.state } 
+    }));
+    
+    return true;
+  };
+
+  /**
+   * Get an overview of all timelines/snapshots available
+   */
+  GraceX.getTimelines = function() {
+    return GraceX.stateHistory.map((snap, i) => ({
+      index: i,
+      frameOffset: GraceX.stateHistory.length - 1 - i,
+      time: new Date(snap.timestamp).toLocaleTimeString(),
+      module: snap.meta.activeModule,
+      intent: snap.meta.intent,
+      reply: snap.meta.replyPreview
+    }));
+  };
+
   // Update time context (call periodically)
   GraceX.updateContext = function() {
     GraceX.state.context.timeOfDay = getTimeOfDay();
@@ -100,9 +167,14 @@
     return GraceX.state;
   };
 
-  GraceX.patchState = function (patch) {
+  GraceX.patchState = function (patch, skipHistory = false) {
     try {
       if (!patch || typeof patch !== "object") return GraceX.state;
+      
+      // Record history before mutating if not skipped
+      if (!skipHistory) {
+        recordHistorySnapshot();
+      }
       
       // Deep merge for nested objects
       GraceX.state = {
