@@ -31,7 +31,7 @@
   // RAM STRUCTURE
   // ═══════════════════════════════════════════════════════════════════════
   
-  const RAM_STORE = {
+  const DEFAULT_RAM_STORE = {
     // Clipboard-style buffers (max 10)
     buffers: {},
     maxBuffers: 10,
@@ -57,6 +57,53 @@
       lastClear: Date.now()
     }
   };
+
+  let RAM_STORE;
+  try {
+    const saved = localStorage.getItem('gracex_ram_store');
+    if (saved) {
+      RAM_STORE = JSON.parse(saved);
+      console.log("[RAM] Restored state from localStorage");
+    } else {
+      RAM_STORE = JSON.parse(JSON.stringify(DEFAULT_RAM_STORE));
+    }
+  } catch (e) {
+    console.warn("[RAM] Failed to load from localStorage, using default state", e);
+    RAM_STORE = JSON.parse(JSON.stringify(DEFAULT_RAM_STORE));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CROSS-TAB SYNCING
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  let syncChannel = null;
+  let isReceivingSync = false;
+  try {
+    syncChannel = new BroadcastChannel('gracex_ram_sync');
+    syncChannel.onmessage = (event) => {
+      if (event.data && event.data.type === 'RAM_SYNC') {
+        isReceivingSync = true;
+        RAM_STORE = event.data.state;
+        console.log(`[RAM] Synchronized state from another tab`);
+        isReceivingSync = false;
+        window.dispatchEvent(new CustomEvent('GRACEX_RAM_UPDATED', { detail: { source: 'sync' } }));
+      }
+    };
+  } catch (e) {
+    console.warn("[RAM] BroadcastChannel not supported, cross-tab sync disabled.");
+  }
+
+  function saveAndSync() {
+    if (isReceivingSync) return;
+    try {
+      localStorage.setItem('gracex_ram_store', JSON.stringify(RAM_STORE));
+      if (syncChannel) {
+        syncChannel.postMessage({ type: 'RAM_SYNC', state: RAM_STORE });
+      }
+    } catch (e) {
+      console.warn("[RAM] Failed to save/sync state:", e);
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // BUFFER OPERATIONS (Clipboard-style)
@@ -120,7 +167,7 @@
       return null;
     }
     
-    updateMeta();
+    updateMeta(true);
     return buffer.data;
   };
 
@@ -129,7 +176,7 @@
    */
   GraceX.RAM.getBufferFull = function(name) {
     if (!name || !RAM_STORE.buffers[name]) return null;
-    updateMeta();
+    updateMeta(true);
     return RAM_STORE.buffers[name];
   };
 
@@ -140,7 +187,10 @@
     if (!name) return false;
     const existed = !!RAM_STORE.buffers[name];
     delete RAM_STORE.buffers[name];
-    if (existed) console.log(`[RAM] Buffer deleted: ${name}`);
+    if (existed) {
+      console.log(`[RAM] Buffer deleted: ${name}`);
+      saveAndSync();
+    }
     return existed;
   };
 
@@ -188,6 +238,7 @@
   GraceX.RAM.clearContext = function() {
     RAM_STORE.workingContext = null;
     console.log("[RAM] Working context cleared");
+    saveAndSync();
   };
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -221,6 +272,7 @@
     };
     
     console.log(`[RAM] Chain started: ${chainId}`);
+    saveAndSync();
     return true;
   };
 
@@ -239,6 +291,7 @@
     chain.currentStep = chain.steps.length;
     
     console.log(`[RAM] Chain step added: ${chainId} (step ${chain.currentStep})`);
+    saveAndSync();
     return true;
   };
 
@@ -262,6 +315,7 @@
     }
     
     console.log(`[RAM] Chain completed: ${chainId}`);
+    saveAndSync();
     return true;
   };
 
@@ -272,6 +326,7 @@
     if (!chainId) return false;
     delete RAM_STORE.chains[chainId];
     console.log(`[RAM] Chain abandoned: ${chainId}`);
+    saveAndSync();
     return true;
   };
 
@@ -304,6 +359,7 @@
   GraceX.RAM.clearScratch = function() {
     RAM_STORE.scratch = {};
     console.log("[RAM] Scratch cleared");
+    saveAndSync();
   };
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -339,6 +395,7 @@
   GraceX.RAM.clearModuleData = function(module) {
     delete RAM_STORE.moduleData[module];
     console.log(`[RAM] Module data cleared: ${module}`);
+    saveAndSync();
   };
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -381,6 +438,7 @@
     RAM_STORE.moduleData = {};
     RAM_STORE.meta.lastClear = Date.now();
     console.log("[RAM] All RAM cleared");
+    saveAndSync();
     return true;
   };
 
@@ -401,6 +459,7 @@
     
     if (collected > 0) {
       console.log(`[RAM] Garbage collection: ${collected} buffers removed`);
+      saveAndSync();
     }
     return collected;
   };
@@ -413,6 +472,41 @@
       ...RAM_STORE,
       exported: Date.now()
     };
+  };
+
+  /**
+   * Export RAM state as a downloadable JSON file
+   */
+  GraceX.RAM.downloadExport = function() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(GraceX.RAM.export(), null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `gracex_ram_export_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    console.log("[RAM] Exported RAM state to file");
+  };
+
+  /**
+   * Import RAM state from JSON string
+   */
+  GraceX.RAM.importState = function(jsonString) {
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (parsed.buffers && parsed.meta) {
+        RAM_STORE = parsed;
+        console.log("[RAM] Imported RAM state successfully");
+        saveAndSync();
+        return true;
+      } else {
+        console.error("[RAM] Invalid RAM state format");
+        return false;
+      }
+    } catch (e) {
+      console.error("[RAM] Error parsing import data:", e);
+      return false;
+    }
   };
 
   /**
@@ -437,9 +531,10 @@ Access Count: ${stats.meta.accessCount}
   // INTERNAL HELPERS
   // ═══════════════════════════════════════════════════════════════════════
   
-  function updateMeta() {
+  function updateMeta(skipSync = false) {
     RAM_STORE.meta.lastAccess = Date.now();
     RAM_STORE.meta.accessCount++;
+    if (!skipSync) saveAndSync();
   }
 
   // Auto garbage collection every 5 minutes

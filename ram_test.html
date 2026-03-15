@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grace-X RAM Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
+        .box { border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
+        button { background: #333; color: #0f0; border: 1px solid #0f0; padding: 5px 10px; cursor: pointer; }
+        button:hover { background: #0f0; color: #000; }
+    </style>
+</head>
+<body>
+    <h1>GRACE-X OMNI-BRAIN VALIDATION</h1>
+    
+    <div class="box">
+        <h3>CONTROLS</h3>
+        <button onclick="setTestBuffer()">Set Buffer ('test_data')</button>
+        <button onclick="checkBuffer()">Get Buffer</button>
+        <button onclick="startChain()">Start Chain ('test_chain')</button>
+        <button onclick="addStep()">Add Chain Step</button>
+        <button onclick="GraceX.RAM.downloadExport()">Export JSON</button>
+        <button onclick="GraceX.RAM.clearAll()">Clear All</button>
+        <br><br>
+        <input type="file" id="importFile" accept=".json">
+        <button onclick="importData()">Import JSON</button>
+    </div>
+
+    <div class="box">
+        <h3>RAM STATS <button onclick="refreshStats()" style="float:right">Refresh</button></h3>
+        <pre id="output">Loading...</pre>
+    </div>
+
+    <!-- Scripts -->
+    <script src="./assets/js/brain/gracex.ram.js"></script>
+    <script>
+        // Update stats UI
+        function refreshStats() {
+            document.getElementById('output').innerText = GraceX.RAM.summary() + "\n\nRaw Stats:\n" + JSON.stringify(GraceX.RAM.getStats(), null, 2);
+        }
+
+        // Listen for cross-tab syncs
+        window.addEventListener('GRACEX_RAM_UPDATED', (e) => {
+            console.log("RAM SYNC EVENT FIRED", e.detail);
+            refreshStats();
+        });
+
+        // Initialize display
+        setTimeout(refreshStats, 100);
+
+        function setTestBuffer() {
+            GraceX.RAM.setBuffer('test_data', { timestamp: Date.now(), msg: "Hello from Omni-Brain" });
+            refreshStats();
+        }
+
+        function checkBuffer() {
+            const data = GraceX.RAM.getBuffer('test_data');
+            alert(JSON.stringify(data));
+            refreshStats();
+        }
+
+        function startChain() {
+            GraceX.RAM.startChain('test_chain', { init: true });
+            refreshStats();
+        }
+
+        function addStep() {
+            GraceX.RAM.addChainStep('test_chain', { stepTime: Date.now() });
+            refreshStats();
+        }
+
+        function importData() {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) {
+                alert("Please select a JSON file first.");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                GraceX.RAM.importState(e.target.result);
+                refreshStats();
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
