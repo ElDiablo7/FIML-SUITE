@@ -405,18 +405,30 @@
       return;
     }
 
+    // Retrieve voice context from Omni-Brain
+    let contextHistory = [];
+    if (window.GraceX && window.GraceX.RAM) {
+      contextHistory = window.GraceX.RAM.getBuffer("voice_context") || [];
+    }
+
     // Try to get response from brain
     let result;
     try {
+      // Build context-aware string instead of just the isolated text
+      const fullContextString = contextHistory.length > 0
+        ? `[Conversation History: ${contextHistory.join(" | ")}] User says: ${cleanText}`
+        : cleanText;
+
       if (window.GraceX && typeof window.GraceX.think === 'function') {
         const res = window.GraceX.think({
-          text: cleanText,
+          text: fullContextString,
           module: 'core',
-          mode: 'voice'
+          mode: 'voice',
+          originalText: cleanText // Keep original for display
         });
         result = res.reply || "I heard you, but I'm not sure how to respond.";
       } else if (typeof window.runModuleBrain === 'function') {
-        const reply = window.runModuleBrain('core', cleanText);
+        const reply = window.runModuleBrain('core', fullContextString);
         if (reply && typeof reply.then === 'function') {
           result = await reply;
         } else {
@@ -425,6 +437,14 @@
       } else {
         result = "I heard: " + cleanText + ". But my brain isn't fully connected right now.";
       }
+
+      // Save new context back to Omni-Brain with a 15 min TTL
+      if (window.GraceX && window.GraceX.RAM) {
+        contextHistory.push(cleanText);
+        if (contextHistory.length > 5) contextHistory.shift(); // Keep last 5
+        window.GraceX.RAM.setBuffer("voice_context", contextHistory, { ttl: 15 * 60 * 1000 });
+      }
+
     } catch (err) {
       console.warn('[GRACEX VOICE] Brain error:', err);
       result = "Sorry, I had trouble processing that.";

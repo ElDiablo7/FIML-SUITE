@@ -62,9 +62,33 @@
   }
 
   // =====================================
-  // MAIN THINK FUNCTION (V2)
+  // API INTEGRATION HOOKS (Async)
   // =====================================
-  GraceX.think = function (input) {
+  GraceX.API_REGISTRY = {};
+
+  GraceX.registerAPI = function(intent, handler) {
+    if (typeof handler !== 'function') return false;
+    GraceX.API_REGISTRY[intent] = handler;
+    console.log(`[GRACEX BRAIN] API Registered for intent: ${intent}`);
+    return true;
+  };
+
+  GraceX.invokeAPI = async function(intent, payload) {
+    if (!GraceX.API_REGISTRY[intent]) return null;
+    
+    try {
+      console.log(`[GRACEX BRAIN] Invoking API for intent: ${intent}`);
+      return await GraceX.API_REGISTRY[intent](payload);
+    } catch (e) {
+      console.error(`[GRACEX BRAIN] API Invocation Error for ${intent}:`, e);
+      return null;
+    }
+  };
+
+  // =====================================
+  // MAIN THINK FUNCTION (V3 - Async)
+  // =====================================
+  GraceX.think = async function (input) {
     const startTime = Date.now();
     
     try {
@@ -82,7 +106,21 @@
       });
 
       // Route the input
-      const res = GraceX.route(input);
+      let res = GraceX.route ? GraceX.route(input) : { 
+        reply: "No internal router found.", 
+        intent: "unknown", 
+        actions: [], 
+        safety: { level: 'normal' } 
+      };
+
+      // Handle External API Override if the resolved intent maps to an API hook
+      if (GraceX.API_REGISTRY[res.intent]) {
+        // We halt synchronous rendering and await the API
+        const apiResponse = await GraceX.invokeAPI(res.intent, { input, routeResult: res });
+        if (apiResponse) {
+          res = { ...res, ...apiResponse }; // Merge API overrides (e.g. data appended to reply)
+        }
+      }
 
       // Execute any actions from the response
       if (res.actions && res.actions.length > 0) {
