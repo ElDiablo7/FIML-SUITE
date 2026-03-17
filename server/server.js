@@ -273,7 +273,7 @@ const CONFIG = {
   // CORS
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',')
-    : ['https://fiml-suite.onrender.com', 'https://push-to-this-e.onrender.com', 'http://localhost:3000', '*'],
+    : ['https://fiml-suite.onrender.com', 'https://pro-film-prod.onrender.com', 'http://localhost:3000', '*'],
 
   // Logging
   enableLogging: process.env.ENABLE_LOGGING !== 'false',
