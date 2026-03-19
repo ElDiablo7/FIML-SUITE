@@ -154,11 +154,12 @@
         });
       }
 
-      // We don't tryPlay on loadeddata automatically because we are already running inside a click handler
-      tryPlay();
-
-      // Force load
+      // Force load before playing to prevent interrupting the play() request
       video1.load();
+
+      // We don't tryPlay on loadeddata automatically because we are already running inside a click handler
+      // We no longer have a click handler, but we still try to play immediately
+      tryPlay();
 
       // Aggressive fallback: if nothing happens after 8s, complete boot
       setTimeout(() => {
