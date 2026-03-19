@@ -68,21 +68,12 @@
         <div class="boot-skip-hint">
           Press any key to skip
         </div>
-
-        <!-- Autoplay Policy Override Overlay -->
-        <div id="boot-start-overlay" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); cursor: pointer;">
-          <button id="boot-start-btn" style="padding: 15px 30px; font-size: 20px; background: rgba(0, 212, 255, 0.2); border: 1px solid #00d4ff; color: #00d4ff; border-radius: 4px; box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); pointer-events: none;">START GRACE-X</button>
-        </div>
       `;
       
       document.body.insertBefore(bootScreen, document.body.firstChild);
       
-      // Wait for user interaction to start the video
-      const overlay = document.getElementById('boot-start-overlay');
-      overlay.addEventListener('click', () => {
-        overlay.style.display = 'none';
-        this.startBootVideo();
-      });
+      // Auto start video without waiting for a click
+      this.startBootVideo();
     },
 
     startBootVideo() {
@@ -155,10 +146,11 @@
         video1.play().then(() => {
           playStarted = true;
           console.log('[BOOT] Video 1 playing!');
-          video1.muted = false; // We can unmute immediately now because of the prior user click
+          video1.muted = false; // Auto-unmute
         }).catch((err) => {
           console.warn('[BOOT] Play failed:', err.message);
-          // Don't fallback immediately - might just need user interaction
+          // If autoplay fails, we just complete boot so the user isn't stuck
+          self.completeBoot();
         });
       }
 
