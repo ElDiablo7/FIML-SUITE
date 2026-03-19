@@ -57,6 +57,11 @@
       const bootScreen = document.createElement('div');
       bootScreen.id = 'gracex-boot-screen';
       bootScreen.innerHTML = `
+        <!-- Logo Placeholder displayed until video plays -->
+        <div id="boot-logo-placeholder" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#010203;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.8s ease, visibility 0.8s;">
+          <img src="assets/images/gracex-logo.png" alt="GRACE-X" style="max-width:280px;width:25vw;min-width:150px;height:auto;opacity:0.9;filter:drop-shadow(0 0 15px rgba(255,255,255,0.1));">
+        </div>
+
         <!-- Full-screen boot video (three clips, crossfade) - WITH SOUND -->
         <div class="boot-video-layer" id="boot-video-layer">
           <video id="boot-video-1" class="boot-video boot-video-active" src="assets/video/boot-1.mp4" playsinline preload="auto" muted></video>
@@ -147,6 +152,13 @@
           playStarted = true;
           console.log('[BOOT] Video 1 playing!');
           video1.muted = false; // Auto-unmute
+          
+          // Hide placeholder once video successfully starts playing
+          const ph = document.getElementById('boot-logo-placeholder');
+          if (ph) {
+            ph.style.opacity = '0';
+            setTimeout(() => { ph.style.visibility = 'hidden'; }, 800);
+          }
         }).catch((err) => {
           console.warn('[BOOT] Play failed:', err.message);
           // If autoplay fails, we just complete boot so the user isn't stuck
