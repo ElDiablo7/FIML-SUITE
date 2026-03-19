@@ -332,7 +332,6 @@
       const wrappedBrain = async function(moduleId, text) {
         // Check if Level 5 is enabled (API endpoint configured)
         const apiConfigured = BRAIN_CONFIG.apiEndpoint && 
-                              BRAIN_CONFIG.apiEndpoint !== '/api/brain' &&
                               BRAIN_CONFIG.apiEndpoint !== '';
         
         if (apiConfigured) {
@@ -369,7 +368,7 @@
 
   // Log configuration status
   const apiConfigured = BRAIN_CONFIG.apiEndpoint && 
-                        BRAIN_CONFIG.apiEndpoint !== '/api/brain';
+                        BRAIN_CONFIG.apiEndpoint !== '';
   
   console.info(
     `[GRACEX] Level 5 Brains v2.0 loaded\n` +
