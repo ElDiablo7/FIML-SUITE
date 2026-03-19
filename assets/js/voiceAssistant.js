@@ -32,7 +32,8 @@
     // How long to wait for speech before timing out
     silenceTimeout: 15000, // 5 seconds of silence
     // Continuous background listening for wake word
-    backgroundListening: true
+    // Disabled automatically on mobile because Chrome/Safari emit a "beep" on every restart
+    backgroundListening: !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
   };
 
   // ============================================
