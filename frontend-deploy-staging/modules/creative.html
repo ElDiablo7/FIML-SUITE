@@ -18,7 +18,11 @@
         <button type="button" class="brain-mic-btn" id="creative-brain-mic" title="Voice input">🎙️</button>
         <input id="creative-brain-input" type="text" placeholder="e.g. 'Add tone board for warehouse scene'"/>
         <button id="creative-brain-send">Ask</button>
-        <button type="button" class="brain-context-btn" title="Read placeholders and current values so the brain can calculate">📋 Use page context</button>
+        <div class="brain-suggestions" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;margin-bottom:8px;">
+          <button type="button" class="brain-suggest-btn btn btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;" data-prompt="How can you help me in this module?">💡 How can you help?</button>
+          <button type="button" class="brain-suggest-btn btn btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;" data-prompt="Give me a full rundown of what you can do.">📋 What can you do?</button>
+          <button type="button" class="brain-suggest-btn btn btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;" data-prompt="Who built you?">🏗️ Who built you?</button>
+        </div>
       </div>
       <div class="brain-actions"><button class="builder-btn" id="creative-brain-clear">Clear conversation</button></div>
     </div>

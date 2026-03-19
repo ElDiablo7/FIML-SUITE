@@ -61,31 +61,39 @@
     return 'Page data (placeholders and current values):\n' + items.join('\n');
   };
 
-  function wireAllContextButtons() {
+  function wireAllSuggestionButtons() {
     const view = document.getElementById('view');
     const root = view || document.body;
-    root.querySelectorAll('.brain-context-btn').forEach(function(btn) {
+    root.querySelectorAll('.brain-suggest-btn').forEach(function(btn) {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = "true";
+
       const panel = btn.closest('.module-brain');
       const input = panel ? panel.querySelector('input[id*="-brain-input"]') : null;
+      const sendBtn = panel ? panel.querySelector('button[id*="-brain-send"]') : null;
+
       if (!input) return;
+
       btn.onclick = function() {
-        const ctx = window.GRACEX_getPageContext(view || document.body);
-        const prefix = '[Page context]\n' + ctx + '\n\n';
-        input.value = prefix + (input.value ? input.value : '');
+        const prompt = btn.dataset.prompt || btn.textContent.trim();
+        input.value = prompt;
         input.focus();
+        
+        // Optional: auto-send if desired. Comment out if user should press enter.
+        // if (sendBtn) sendBtn.click();
       };
     });
   }
 
   document.addEventListener('gracex:module:loaded', function() {
-    setTimeout(wireAllContextButtons, 100);
+    setTimeout(wireAllSuggestionButtons, 100);
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireAllContextButtons);
+    document.addEventListener('DOMContentLoaded', wireAllSuggestionButtons);
   } else {
-    wireAllContextButtons();
+    wireAllSuggestionButtons();
   }
 
-  console.log('[GRACEX] Page context utility loaded — brains can read placeholders and calculate.');
+  console.log('[GRACEX] Prompt suggestion buttons wired up.');
 })();
