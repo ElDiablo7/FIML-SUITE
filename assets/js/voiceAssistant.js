@@ -48,6 +48,7 @@
   let silenceTimer = null;
   let statusIndicator = null;
   let lastWakeTime = 0;
+  let wakeWordErrorCount = 0; // Tracks consecutive errors for exponential backoff
   const WAKE_COOLDOWN_MS = 2500; // stops wake spam / repeated triggers
 
   // ============================================
@@ -192,6 +193,7 @@
         const now = Date.now();
         if (wakeWordDetected && !isActiveMode && (now - lastWakeTime) > WAKE_COOLDOWN_MS) {
           lastWakeTime = now;
+          wakeWordErrorCount = 0; // Reset error count on successful wake
           console.log('[GRACEX VOICE] Wake word detected:', transcript);
 
           // Stop wake word listener before speaking/active mode
@@ -213,13 +215,21 @@
 
     wakeWordRecognizer.onerror = (event) => {
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        console.warn('[GRACEX VOICE] Wake word error:', event.error);
+        wakeWordErrorCount++;
+        console.warn('[GRACEX VOICE] Wake word error:', event.error, 'Count:', wakeWordErrorCount);
+      } else {
+        // no-speech isn't a critical failure, don't increment backoff
+        wakeWordErrorCount = 0;
       }
-      // Restart wake word listening after error
+      
+      // Calculate exponential backoff (max 30s)
+      const backoffMs = Math.min(1000 * Math.pow(2, wakeWordErrorCount), 30000);
+
+      // Restart wake word listening after error with backoff
       if (CONFIG.backgroundListening && !isActiveMode) {
         setTimeout(() => {
           try { startWakeWordListening(); } catch(e) {}
-        }, 1000);
+        }, backoffMs);
       }
     };
 

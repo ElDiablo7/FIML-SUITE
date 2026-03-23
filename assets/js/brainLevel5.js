@@ -108,8 +108,17 @@
     try {
       localStorage.setItem(`gracex_history_${moduleId}`, JSON.stringify(conversationMemory[moduleId]));
     } catch (e) {
-      // localStorage might be full or disabled
-      console.warn('[GRACEX] Could not persist conversation history');
+      console.warn('[GRACEX] Could not persist conversation history, memory may be full. Pruning...', e);
+      if (e.name === 'QuotaExceededError' || e.message.includes('quota')) {
+        // Prune the oldest 50%
+        const keepCount = Math.floor(conversationMemory[moduleId].length / 2);
+        conversationMemory[moduleId] = conversationMemory[moduleId].slice(-keepCount);
+        try {
+          localStorage.setItem(`gracex_history_${moduleId}`, JSON.stringify(conversationMemory[moduleId]));
+        } catch (subErr) {
+          console.error('[GRACEX] Critical: Unable to persist even after pruning.', subErr);
+        }
+      }
     }
   }
 
