@@ -19,7 +19,7 @@
     enableMemory: true,
     
     // Max conversation history to send
-    maxHistory: 10,
+    maxHistory: 100, // Upgraded from 10 for Infinite Brain Memory
     
     // Request timeout (ms)
     timeout: 30000,
@@ -65,6 +65,58 @@
     }
   };
 
+  // IndexedDB Controller for Infinite Brain Memory
+  const idb = {
+    db: null,
+    async init() {
+      if (this.db) return this.db;
+      return new Promise((resolve, reject) => {
+        const request = window.indexedDB.open('GraceXBrain_DB', 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('conversations')) {
+            db.createObjectStore('conversations');
+          }
+        };
+        request.onsuccess = (e) => {
+          this.db = e.target.result;
+          resolve(this.db);
+        };
+        request.onerror = (e) => reject(e.target.error);
+      });
+    },
+    async get(key) {
+      const db = await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('conversations', 'readonly');
+        const store = tx.objectStore('conversations');
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    },
+    async set(key, val) {
+      const db = await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('conversations', 'readwrite');
+        const store = tx.objectStore('conversations');
+        const req = store.put(val, key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    },
+    async delete(key) {
+      const db = await this.init();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('conversations', 'readwrite');
+        const store = tx.objectStore('conversations');
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+  };
+
   // Conversation memory storage (per module)
   const conversationMemory = {};
 
@@ -104,33 +156,38 @@
       conversationMemory[moduleId] = conversationMemory[moduleId].slice(-BRAIN_CONFIG.maxHistory);
     }
     
-    // Persist to localStorage
-    try {
-      localStorage.setItem(`gracex_history_${moduleId}`, JSON.stringify(conversationMemory[moduleId]));
-    } catch (e) {
-      console.warn('[GRACEX] Could not persist conversation history, memory may be full. Pruning...', e);
-      if (e.name === 'QuotaExceededError' || e.message.includes('quota')) {
-        // Prune the oldest 50%
-        const keepCount = Math.floor(conversationMemory[moduleId].length / 2);
-        conversationMemory[moduleId] = conversationMemory[moduleId].slice(-keepCount);
-        try {
-          localStorage.setItem(`gracex_history_${moduleId}`, JSON.stringify(conversationMemory[moduleId]));
-        } catch (subErr) {
-          console.error('[GRACEX] Critical: Unable to persist even after pruning.', subErr);
-        }
-      }
-    }
+    // Persist to IndexedDB (fire-and-forget completely detached from Main Thread locking)
+    idb.set(moduleId, conversationMemory[moduleId]).catch(e => {
+      console.warn('[GRACEX] Failed to persist history to IndexedDB', e);
+    });
   }
 
-  // Load history from localStorage on init
-  function loadHistoryFromStorage(moduleId) {
+  // Load history from IndexedDB on init (with seamless localStorage migration)
+  async function loadHistoryFromStorage(moduleId) {
     try {
-      const stored = localStorage.getItem(`gracex_history_${moduleId}`);
-      if (stored) {
-        conversationMemory[moduleId] = JSON.parse(stored);
+      // 1. Check IndexedDB first
+      const storedIdb = await idb.get(moduleId);
+      if (storedIdb) {
+        conversationMemory[moduleId] = storedIdb;
+        return;
       }
+      
+      // 2. Migration: Check old localStorage
+      const legacy = localStorage.getItem(`gracex_history_${moduleId}`);
+      if (legacy) {
+        conversationMemory[moduleId] = JSON.parse(legacy);
+        // Persist migrated array to IDB and remove from local
+        await idb.set(moduleId, conversationMemory[moduleId]);
+        localStorage.removeItem(`gracex_history_${moduleId}`);
+        console.info(`[GRACEX] Migrated ${moduleId} history to Infinite IndexedDB Memory`);
+        return;
+      }
+      
+      // 3. Fallback blank memory
+      conversationMemory[moduleId] = [];
     } catch (e) {
-      console.warn('[GRACEX] Could not load conversation history');
+      console.warn(`[GRACEX] Could not load conversation history for ${moduleId}`, e);
+      conversationMemory[moduleId] = [];
     }
   }
 
@@ -139,6 +196,7 @@
     if (conversationMemory[moduleId]) {
       conversationMemory[moduleId] = [];
     }
+    idb.delete(moduleId).catch(()=>{});
     try {
       localStorage.removeItem(`gracex_history_${moduleId}`);
     } catch (e) {
@@ -179,9 +237,9 @@
     const systemPrompt = BRAIN_CONFIG.systemPrompts[moduleId] || 
       `You are GRACE-X ${moduleId}, a helpful assistant. Be friendly, concise, and helpful.`;
     
-    // Load history if not already loaded
+    // Load history if not already loaded (Wait for IDB)
     if (!conversationMemory[moduleId]) {
-      loadHistoryFromStorage(moduleId);
+      await loadHistoryFromStorage(moduleId);
     }
     
     const history = getConversationHistory(moduleId);
