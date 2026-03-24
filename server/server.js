@@ -1161,6 +1161,7 @@ async function callOpenAI(messages, temperature, max_tokens) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error('[OpenAI] API Error:', response.status, JSON.stringify(errorData?.error || errorData));
     const error = new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
     error.code = 'OPENAI_ERROR';
     error.statusCode = response.status === 401 ? 401 : 502;
