@@ -35,8 +35,8 @@
   // Think: calm authority, NOT friendly assistant
   
   let voiceSettings = {
-    rate: 1.0,        // Medium-fast (spec: deliberate, rhythmic)
-    pitch: 1.0,       // Mid-range female
+    rate: 1.10,        // Medium-fast (spec: deliberate, rhythmic)
+    pitch: 1.15,       // Mid-range female
     volume: 0.92,     // Forward, controlled projection
     lang: 'en-GB',    // UK English (LOCKED)
     voice: null,
@@ -59,8 +59,8 @@
     // DEFAULT VOICE (SPEC BASELINE)
     // ═══════════════════════════════════════════
     grace_default: {
-      rate: 1.0,        // Medium-fast
-      pitch: 1.0,       // Mid-range
+      rate: 1.10,        // Medium-fast
+      pitch: 1.15,       // Mid-range
       volume: 0.92,     // Forward, controlled
       name: '✨ GRACE (Default)',
       description: 'Calm authority. Mid pitch. Medium-fast. Confident UK female.'
@@ -317,9 +317,9 @@
     // Priority 1: Premium UK female voices (soft/natural tone)
     // These voices tend to have the mid-low register the spec requires
     const premiumUKVoices = [
+      'Google UK English Female', // Prioritized highly per user request
       'Microsoft Hazel Desktop',  // Windows UK female - calm tone
       'Microsoft Hazel',
-      'Google UK English Female',
       'Serena',                   // Apple UK - natural
       'Kate',                     // Apple UK
       'Daniel',                   // Avoid - male
@@ -630,7 +630,7 @@
    */
   function saveSettings() {
     try {
-      localStorage.setItem('gracex_voice_settings', JSON.stringify({
+      localStorage.setItem('gracex_voice_settings_v2', JSON.stringify({
         rate: voiceSettings.rate,
         pitch: voiceSettings.pitch,
         volume: voiceSettings.volume,
@@ -650,7 +650,7 @@
    */
   function loadSettings() {
     try {
-      const saved = localStorage.getItem('gracex_voice_settings');
+      const saved = localStorage.getItem('gracex_voice_settings_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
         

@@ -59,14 +59,12 @@
       bootScreen.innerHTML = `
         <!-- Logo Placeholder displayed until video plays -->
         <div id="boot-logo-placeholder" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#010203;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.8s ease, visibility 0.8s;">
-          <img src="assets/images/gracex-logo.png" alt="GRACE-X" style="max-width:280px;width:25vw;min-width:150px;height:auto;opacity:0.9;filter:drop-shadow(0 0 15px rgba(255,255,255,0.1));">
+          <img src="assets/img/gracex_main_logo.png" alt="GRACE-X" style="max-width:280px;width:25vw;min-width:150px;height:auto;opacity:0.9;filter:drop-shadow(0 0 15px rgba(255,255,255,0.1));">
         </div>
 
-        <!-- Full-screen boot video (three clips, crossfade) - WITH SOUND -->
+        <!-- Full-screen boot video - WITH SOUND -->
         <div class="boot-video-layer" id="boot-video-layer">
-          <video id="boot-video-1" class="boot-video boot-video-active" src="assets/video/boot-1.mp4" playsinline preload="auto" muted></video>
-          <video id="boot-video-2" class="boot-video" src="assets/video/boot-2.mp4" playsinline preload="auto" muted></video>
-          <video id="boot-video-3" class="boot-video" src="assets/video/boot-3.mp4" playsinline preload="auto" muted></video>
+          <video id="boot-video-1" class="boot-video boot-video-active" src="assets/video/boot_3.mp4" playsinline preload="auto" muted></video>
         </div>
         
         <!-- Skip Hint (minimal, bottom corner) -->
@@ -83,63 +81,19 @@
 
     startBootVideo() {
       const video1 = document.getElementById('boot-video-1');
-      const video2 = document.getElementById('boot-video-2');
-      const video3 = document.getElementById('boot-video-3');
-      if (!video1 || !video2 || !video3) return;
+      if (!video1) return;
 
       const self = this;
-      const videos = [video1, video2, video3];
 
       function fallbackNoVideo() {
         console.warn('[BOOT] Video failed, completing boot after 6s');
         setTimeout(() => self.completeBoot(), 6000);
       }
 
-      function crossfadeToNext(currentIdx) {
-        if (self.crossfadedFrom[currentIdx]) return;
-        self.crossfadedFrom[currentIdx] = true;
-
-        const current = videos[currentIdx - 1];
-        const next = videos[currentIdx];
-        
-        if (!next) {
-          self.completeBoot();
-          return;
-        }
-
-        console.log(`🎬 Crossfade: video ${currentIdx} → video ${currentIdx + 1}`);
-        current.classList.remove('boot-video-active');
-        next.classList.add('boot-video-active');
-        next.muted = false;
-        next.play().catch(() => fallbackNoVideo());
-        self.currentVideo = currentIdx + 1;
-      }
-
-      // Set up event listeners for each video
-      videos.forEach((video, idx) => {
-        const videoNum = idx + 1;
-        
-        video.addEventListener('error', fallbackNoVideo);
-        
-        video.addEventListener('ended', () => {
-          if (videoNum === 3) {
-            // Last video ended, complete boot
-            self.completeBoot();
-          } else {
-            // Crossfade to next video
-            crossfadeToNext(videoNum);
-          }
-        });
-
-        // Start crossfade slightly before video ends (smoother transition)
-        video.addEventListener('timeupdate', () => {
-          const d = video.duration;
-          if (self.currentVideo === videoNum && videoNum < 3 && isFinite(d) && d > 0) {
-            if (video.currentTime >= Math.max(0, d - 0.5)) {
-              crossfadeToNext(videoNum);
-            }
-          }
-        });
+      video1.addEventListener('error', fallbackNoVideo);
+      
+      video1.addEventListener('ended', () => {
+        self.completeBoot();
       });
 
       // Track if we've started playing
@@ -190,11 +144,7 @@
 
     completeBoot() {
       const video1 = document.getElementById('boot-video-1');
-      const video2 = document.getElementById('boot-video-2');
-      const video3 = document.getElementById('boot-video-3');
       if (video1) video1.pause();
-      if (video2) video2.pause();
-      if (video3) video3.pause();
       
       // Fade out immediately
       this.fadeOutBoot();
