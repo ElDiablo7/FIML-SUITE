@@ -107,11 +107,13 @@
           console.log('[BOOT] Video 1 playing!');
           video1.muted = false; // Auto-unmute
           
-          // Hide placeholder once video successfully starts playing
+          // Keep placeholder visible for a short time before fading out
           const ph = document.getElementById('boot-logo-placeholder');
           if (ph) {
-            ph.style.opacity = '0';
-            setTimeout(() => { ph.style.visibility = 'hidden'; }, 800);
+            setTimeout(() => {
+              ph.style.opacity = '0';
+              setTimeout(() => { ph.style.visibility = 'hidden'; }, 800);
+            }, 1500); // 1.5 seconds delay
           }
         }).catch((err) => {
           console.warn('[BOOT] Play failed:', err.message);
