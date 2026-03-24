@@ -56,6 +56,7 @@
                    document.getElementById(moduleId + '-brain-output');
     const clearBtn = getElement(moduleId, 'clear') || 
                      document.getElementById(moduleId + '-brain-clear');
+    const exportBtn = document.getElementById(moduleId + '-brain-export');
 
     if (!panel || !input || !send || !output) {
       // Only log if we found at least one element (partial wiring)
@@ -166,6 +167,30 @@
       });
     }
 
+    // Export conversation
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function() {
+        const messages = output.querySelectorAll('.brain-message');
+        if (messages.length === 0) return;
+        let chatText = `GRACE-X ${moduleId.toUpperCase()} CHAT EXPORT\n`;
+        chatText += `Generated: ${new Date().toLocaleString()}\n\n`;
+        messages.forEach(msg => {
+          const role = msg.classList.contains('brain-message-user') ? 'You' : 
+                       msg.classList.contains('brain-message-system') ? 'System' : 'GRACE';
+          chatText += `[${role}]: ${msg.textContent.trim()}\n\n`;
+        });
+        const blob = new Blob([chatText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `GRACEX_${moduleId}_chat_export.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+
     // Send button
     send.addEventListener('click', handleQuestion);
 
@@ -191,6 +216,7 @@
     const send = document.getElementById(options.sendId || moduleId + '-brain-send');
     const output = document.getElementById(options.outputId || moduleId + '-brain-output');
     const clearBtn = options.clearId ? document.getElementById(options.clearId) : null;
+    const exportBtn = document.getElementById(options.exportId || moduleId + '-brain-export');
 
     if (!panel || !input || !send || !output) {
       console.warn('[GRACEX Brain V5] Missing elements for module', moduleId);
@@ -296,6 +322,29 @@
         if (options.initialMessage) {
           appendMessage('ai', options.initialMessage); // Re-add initial message
         }
+      });
+    }
+
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        const messages = output.querySelectorAll('.brain-message');
+        if (messages.length === 0) return;
+        let chatText = `GRACE-X ${moduleId.toUpperCase()} CHAT EXPORT\n`;
+        chatText += `Generated: ${new Date().toLocaleString()}\n\n`;
+        messages.forEach(msg => {
+          const role = msg.classList.contains('brain-message-user') ? 'You' : 
+                       msg.classList.contains('brain-message-system') ? 'System' : 'GRACE';
+          chatText += `[${role}]: ${msg.textContent.trim()}\n\n`;
+        });
+        const blob = new Blob([chatText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `GRACEX_${moduleId}_chat_export.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       });
     }
 
