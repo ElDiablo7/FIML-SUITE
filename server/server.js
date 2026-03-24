@@ -12,12 +12,55 @@ require('dotenv').config({ path: rootEnv, override: true }); // root .env overwr
 const hasRoot = require('fs').existsSync(rootEnv);
 const hasServer = require('fs').existsSync(serverEnv);
 console.log('[ENV] Root .env: %s | Server .env: %s (root wins)', hasRoot ? 'loaded' : 'none', hasServer ? 'loaded' : 'none');
-if (!process.env.OPENAI_API_KEY && !process.env.API_KEY) {
-  console.warn('Warning: OPENAI_API_KEY or API_KEY not set. Add to server/.env or .env in repo root.');
+
+// ── Boot-time API key validation ──────────────────────────────────────────
+const _openaiKey = process.env.OPENAI_API_KEY || '';
+const _anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+if (!_openaiKey && !process.env.API_KEY && !_anthropicKey) {
+  console.warn('[ENV] ⚠️  No API keys found. Add OPENAI_API_KEY to .env in repo root.');
 } else {
-  console.log('[ENV] LLM_PROVIDER=%s, API key set', process.env.LLM_PROVIDER || 'openai');
+  if (_openaiKey && !_openaiKey.startsWith('sk-')) {
+    console.error('[ENV] ❌  OPENAI_API_KEY looks malformed (does not start with "sk-"). Check .env for line-break or copy errors.');
+  } else if (_openaiKey) {
+    console.log('[ENV] ✅  OpenAI key validated — provider=%s', process.env.LLM_PROVIDER || 'openai');
+  }
+  if (_anthropicKey) console.log('[ENV] ✅  Anthropic key present (fallback ready)');
 }
 if (process.env.APP_URL) console.log('[ENV] APP_URL=%s (frontend config uses this)', process.env.APP_URL);
+
+// ── Circuit breaker: tracks provider failure counts ──────────────────────
+const providerCircuit = {
+  openai:     { failures: 0, cooldownUntil: 0 },
+  anthropic:  { failures: 0, cooldownUntil: 0 },
+  openrouter: { failures: 0, cooldownUntil: 0 },
+  google:     { failures: 0, cooldownUntil: 0 },
+  ollama:     { failures: 0, cooldownUntil: 0 },
+};
+const CIRCUIT_THRESHOLD = 3;        // failures before tripping
+const CIRCUIT_COOLDOWN  = 60_000;   // 60 s cooldown
+
+function circuitIsOpen(provider) {
+  const c = providerCircuit[provider];
+  if (!c) return false;
+  if (c.cooldownUntil && Date.now() < c.cooldownUntil) return true; // still cooling
+  c.cooldownUntil = 0; // cooldown expired, reset
+  return false;
+}
+
+function circuitFailed(provider) {
+  const c = providerCircuit[provider];
+  if (!c) return;
+  c.failures++;
+  if (c.failures >= CIRCUIT_THRESHOLD) {
+    c.cooldownUntil = Date.now() + CIRCUIT_COOLDOWN;
+    console.warn(`[CIRCUIT] ⚡ Provider "${provider}" tripped — cooling down 60 s`);
+  }
+}
+
+function circuitSuccess(provider) {
+  const c = providerCircuit[provider];
+  if (c) { c.failures = 0; c.cooldownUntil = 0; }
+}
 
 const express = require('express');
 const cors = require('cors');
@@ -1004,48 +1047,77 @@ app.post('/api/brain', rateLimitMiddleware, async (req, res) => {
     messageCount: sanitizedMessages.length
   });
 
+  // ── Resilient provider chain with circuit breaker ────────────────────────
+  // Build ordered list: primary provider first, then available fallbacks
+  const PRIMARY = provider;
+  const PROVIDER_FNS = {
+    openai:      (m, t, k) => callOpenAI(m, t, k),
+    anthropic:   (m, t, k) => callAnthropic(m, t, k),
+    openrouter:  (m, t, k) => callOpenRouter(m, t, k),
+    google:      (m, t, k) => callGoogle(m, t, k),
+    ollama:      (m, t, k) => callOllama(m, t, k),
+  };
+  // Fallback order — skip any provider that has no key configured
+  const FALLBACK_ORDER = ['openai', 'anthropic', 'openrouter', 'google', 'ollama']
+    .filter(p => {
+      if (p === 'openai')      return !!(_openaiKey || process.env.API_KEY);
+      if (p === 'anthropic')   return !!process.env.ANTHROPIC_API_KEY;
+      if (p === 'openrouter')  return !!process.env.OPENROUTER_API_KEY;
+      if (p === 'google')      return !!process.env.GOOGLE_API_KEY;
+      if (p === 'ollama')      return true; // always available locally
+      return false;
+    })
+    .filter(p => PROVIDER_FNS[p]);
+
+  // Put primary first (deduplicated)
+  const orderedProviders = [PRIMARY, ...FALLBACK_ORDER.filter(p => p !== PRIMARY)];
+
   try {
     let reply;
     const startTime = Date.now();
+    let usedProvider = PRIMARY;
+    let lastError;
 
-    switch (provider) {
-      case 'openai':
-        reply = await callOpenAI(sanitizedMessages, validTemp, validMaxTokens);
-        break;
-      case 'anthropic':
-        reply = await callAnthropic(sanitizedMessages, validTemp, validMaxTokens);
-        break;
-      case 'openrouter':
-        reply = await callOpenRouter(sanitizedMessages, validTemp, validMaxTokens);
-        break;
-      case 'google':
-        reply = await callGoogle(sanitizedMessages, validTemp, validMaxTokens);
-        break;
-      case 'ollama':
-        reply = await callOllama(sanitizedMessages, validTemp, validMaxTokens);
-        break;
-      default:
-        return res.status(400).json({
-          error: `Unsupported provider: ${provider}`,
-          code: 'UNSUPPORTED_PROVIDER',
-          supportedProviders: ['openai', 'anthropic', 'google', 'openrouter', 'ollama'],
-          requestId: req.requestId
-        });
+    for (const p of orderedProviders) {
+      if (circuitIsOpen(p)) {
+        log('warn', `[CIRCUIT] Provider "${p}" circuit open — skipping`, { requestId: req.requestId });
+        continue;
+      }
+      if (!PROVIDER_FNS[p]) continue;
+      try {
+        log('info', `Trying provider: ${p}`, { requestId: req.requestId });
+        reply = await PROVIDER_FNS[p](sanitizedMessages, validTemp, validMaxTokens);
+        circuitSuccess(p);
+        usedProvider = p;
+        break; // success — stop trying
+      } catch (err) {
+        lastError = err;
+        circuitFailed(p);
+        log('warn', `Provider "${p}" failed: ${err.message} — trying next fallback`, { requestId: req.requestId });
+      }
+    }
+
+    if (reply === undefined) {
+      throw lastError || new Error('All providers failed');
     }
 
     const duration = Date.now() - startTime;
-    log('info', `Brain response generated in ${duration}ms`, { requestId: req.requestId });
+    log('info', `Brain response from ${usedProvider} in ${duration}ms`, { requestId: req.requestId });
+
+    if (usedProvider !== PRIMARY) {
+      log('warn', `Primary provider "${PRIMARY}" was down — served by fallback "${usedProvider}"`, { requestId: req.requestId });
+    }
 
     res.json({
       reply: reply,
       module: module || 'unknown',
-      provider: provider,
+      provider: usedProvider,
       requestId: req.requestId,
       processingTime: duration
     });
 
   } catch (error) {
-    log('error', `Brain API error: ${error.message}`, { requestId: req.requestId });
+    log('error', `Brain API error (all providers failed): ${error.message}`, { requestId: req.requestId });
 
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({

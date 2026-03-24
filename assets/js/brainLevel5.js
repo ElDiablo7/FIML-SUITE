@@ -372,7 +372,7 @@
       return fallbackReply instanceof Promise ? await fallbackReply : fallbackReply;
     }
 
-    return "Prototype brain here. This module hasn't had its full intelligence trained yet.";
+    return "I'm running in offline mode right now. The AI server isn't reachable — please ensure the backend is running and your API key is set correctly in the .env file, then try again.";
   }
 
   // Expose Level 5 brain system
