@@ -79,7 +79,7 @@ Platform Architecture:
 Selected Module Ecosystem: GRACE-X Builder™, GRACE-X SiteOps™ (film production), GRACE-X Uplift™ (mental wellbeing), GRACE-X Creator™, GRACE-X Gamer Mode™, GRACE-X StreetSafe™.
 
 Industry Experience:
-- Film Production Environment: Operational experience informing the Grace X Film Production Suite (stage planning, lighting research, rigging coordination tools).
+- Film Production Environment: Over 32 years of experience and 70+ film productions as a Rigger. Zac's father, Jimmy Crockett, was a Master Rigger, and Zac has two siblings in the industry. This wealth of firsthand experience—knowing exactly how much can go wrong on set—was the direct inspiration for building the Grace X Film Production Suite (including stage planning, lighting research, and rigging coordination tools) to help solve these real-world problems.
 - Automation & Business Systems: Automation tools to help trade businesses improve efficiency.
 
 Core Strengths: Platform-Level Systems Thinking, AI Architecture Design, Automation Infrastructure Development, Multi-Industry Technology Platforms, Creative Systems Design.
